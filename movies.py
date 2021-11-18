@@ -2,6 +2,7 @@ from flask import make_response, abort
 from config import db
 from models import Directors, Movies, MoviesSchema
 from datetime import datetime
+from sqlalchemy import desc
 
 
 def read_all():
@@ -219,8 +220,8 @@ def get_movies_by_date_range(start_date, end_date):
 
     check_date = check_valid_date(start_date, end_date)
 
-    if check_date != 'valid':
-        abort(400, f"Please insert a valid date with format Year-Month-date, example : 2010-12-29")
+    if check_date == 'invalid':
+        abort(400, f"Please insert a valid date with format Year-Month-date, example : 2010-12-29. And start date must be lower than end date")
 
     movies = Movies.query.filter(Movies.release_date.between(
         start_date, end_date)).order_by(Movies.release_date)
@@ -243,8 +244,12 @@ def check_valid_date(start, end):
 
     if start != "" and end != "":
         try:
-            datetime.strptime(str(start), "%Y-%m-%d").date()
-            datetime.strptime(str(end), "%Y-%m-%d").date()
+            d1 = datetime.strptime(str(start), "%Y-%m-%d").date()
+            d2 = datetime.strptime(str(end), "%Y-%m-%d").date()
+
+            if d1 > d2:  # d1 must lower than d2
+                return 'invalid'
+
             return 'valid'
         except ValueError:
             return 'invalid'
@@ -314,3 +319,86 @@ def get_networth_movie(movie_id):
     # Otherwise, nope, didn't find that movie
     else:
         abort(404, f"Movies not found for Id: {movie_id}")
+
+
+def get_movies_by_name(movies_name):
+    """
+    This function responds to a request for api/directors/get_by_name/{director_name}
+    with one matching director from director
+
+    :param director_name:   name of director to find
+    :return:            director matching name
+
+    use LIKE%name% method
+    """
+    search = f"%{movies_name}%"
+    # posts = Post.query.filter(Post.tags.like(search)).all()
+
+    movies = Movies.query.filter(Movies.original_title.like(search)).all()
+
+    if movies is None:
+        abort(
+            404, f"Cannot find the movie by name like {movies_name}")
+
+    # Serialize the data for the response
+    movies_schema = MoviesSchema(many=True)
+    data = movies_schema.dump(movies)
+    return data
+
+
+def get_expensive_movie():
+    """
+    This function responds to a request for /api/movies
+    with the complete list of movies, sorted by release_date 
+
+    :return:                json list of all movies for all director
+    """
+    # Query the database for all the movies
+    movies = Movies.query.order_by(desc(Movies.budget)).all()
+
+    # Serialize the list of movies from our data
+    Movies_schema = MoviesSchema(many=True)
+    data = Movies_schema.dump(movies)
+    return data[0]
+
+
+def get_more_revenue_movie():
+    """
+    This function responds to a request for /api/movies
+    with the complete list of movies, sorted by release_date 
+
+    :return:                json list of all movies for all director
+    """
+    # Query the database for all the movies
+    movies = Movies.query.order_by(desc(Movies.revenue)).all()
+
+    # Serialize the list of movies from our data
+    Movies_schema = MoviesSchema(many=True)
+    data = Movies_schema.dump(movies)
+    return data[0]
+
+
+def get_best_of_the_best_movie():
+    """
+    This function responds to a request for /api/movies
+    with the complete list of movies, sorted by release_date 
+
+    :return:                json list of all movies for all director
+    """
+    # Query the database for all the movies
+    movies = Movies.query.order_by(desc(Movies.vote_average)).all()
+
+    # Serialize the list of movies from our data
+    Movies_schema = MoviesSchema(many=True)
+    data = Movies_schema.dump(movies)
+    best = data[0]['vote_average']
+
+    best_movies = (
+        Movies.query.filter(Movies.vote_average == best)
+        .all()
+    )
+
+    Movies_schema2 = MoviesSchema(many=True)
+    data = Movies_schema2.dump(best_movies)
+
+    return data
